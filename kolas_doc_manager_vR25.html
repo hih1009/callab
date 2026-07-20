@@ -1,0 +1,2070 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KOLAS 교정품질 문서관리</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --ink:#101826;
+    --ink-soft:#3d4a5c;
+    --paper:#eef1f5;
+    --panel:#ffffff;
+    --line:#d7dee6;
+    --line-soft:#e6eaf0;
+    --brass:#0e5a4a;
+    --brass-soft:#e4f0ec;
+    --gauge:#c76a2b;
+    --gauge-soft:#fbe9dd;
+    --danger:#a4293a;
+    --danger-soft:#f7e2e5;
+    --mono:'IBM Plex Mono','Consolas',monospace;
+    --serif:'Noto Serif KR','Nanum Myeongjo',serif;
+    --sans:'Pretendard','Noto Sans KR','Malgun Gothic',sans-serif;
+    --radius:3px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--sans);
+    background:var(--paper);
+    color:var(--ink);
+    background-image:
+      repeating-linear-gradient(0deg, rgba(16,24,38,0.025) 0px, rgba(16,24,38,0.025) 1px, transparent 1px, transparent 32px),
+      repeating-linear-gradient(90deg, rgba(16,24,38,0.025) 0px, rgba(16,24,38,0.025) 1px, transparent 1px, transparent 32px);
+    min-height:100vh;
+  }
+  .wrap{max-width:1240px;margin:0 auto;padding:28px 24px 80px;}
+
+  /* Header */
+  header.top{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    border-bottom:3px double var(--ink);
+    padding-bottom:16px;margin-bottom:22px;flex-wrap:wrap;gap:16px;
+  }
+  .brand-block{display:flex;align-items:baseline;gap:14px;}
+  .brand-mark{
+    font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--brass);
+    border:1px solid var(--brass);padding:3px 7px;border-radius:2px;
+  }
+  h1{
+    font-family:var(--serif);font-weight:700;font-size:26px;margin:0;letter-spacing:-.01em;
+  }
+  .subtitle{font-size:12.5px;color:var(--ink-soft);margin-top:4px;font-family:var(--mono);letter-spacing:.02em;}
+  .auth-block{display:flex;align-items:center;gap:10px;font-size:13px;}
+  .status-dot{width:8px;height:8px;border-radius:50%;background:#b9c2cd;display:inline-block;}
+  .status-dot.on{background:var(--brass);box-shadow:0 0 0 3px var(--brass-soft);}
+  .status-dot.off{background:var(--danger);box-shadow:0 0 0 3px var(--danger-soft);}
+
+  button{
+    font-family:var(--sans);cursor:pointer;border:1px solid var(--ink);background:var(--panel);
+    color:var(--ink);padding:8px 14px;border-radius:var(--radius);font-size:13px;font-weight:600;
+    transition:background .12s,color .12s,transform .05s;
+  }
+  button:hover{background:var(--ink);color:#fff;}
+  button:active{transform:translateY(1px);}
+  button.primary{background:var(--brass);border-color:var(--brass);color:#fff;}
+  button.primary:hover{background:#0a4437;}
+  button.ghost{background:transparent;border-color:var(--line);color:var(--ink-soft);font-weight:500;}
+  button.ghost:hover{background:var(--panel);color:var(--ink);border-color:var(--ink);}
+  button.danger-btn{border-color:var(--danger);color:var(--danger);background:#fff;}
+  button.danger-btn:hover{background:var(--danger);color:#fff;}
+  button:disabled{opacity:.4;cursor:not-allowed;}
+  button:disabled:hover{background:var(--panel);color:var(--ink);}
+  button.small{padding:5px 10px;font-size:12px;}
+  button.icon-btn{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:28px;height:28px;padding:0;border-color:var(--line);color:var(--ink-soft);background:#fff;
+  }
+  button.icon-btn:hover{background:var(--panel);color:var(--ink);border-color:var(--ink);}
+  button.icon-btn:disabled:hover{background:#fff;color:var(--ink-soft);border-color:var(--line);}
+  button.icon-btn svg{width:15px;height:15px;pointer-events:none;}
+  button.icon-btn.ready{border-color:var(--brass);color:var(--brass);opacity:1;}
+  button.icon-btn.ready:hover{background:var(--brass);color:#fff;}
+
+  /* settings panel */
+  .settings{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 18px;margin-bottom:18px;display:none;
+  }
+  .settings.open{display:block;}
+  .settings h3{margin:0 0 10px;font-size:13px;color:var(--ink-soft);font-weight:700;letter-spacing:.03em;}
+  .settings .row{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
+  .settings label{font-size:12.5px;color:var(--ink-soft);min-width:130px;}
+  .settings input[type=text], .settings input[type=password]{
+    flex:1;min-width:200px;padding:7px 10px;border:1px solid var(--line);border-radius:var(--radius);
+    font-size:13px;font-family:var(--mono);
+  }
+  .settings .hint{font-size:11.5px;color:#7c8896;margin-top:2px;line-height:1.5;}
+
+  /* toolbar */
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap;}
+  .search-box{
+    display:flex;align-items:center;border:1px solid var(--line);border-radius:var(--radius);
+    background:var(--panel);padding:0 10px;min-width:260px;
+  }
+  .search-box input{border:none;outline:none;padding:9px 6px;font-size:13.5px;width:100%;background:transparent;}
+  .chips{display:flex;gap:8px;}
+  .chip{
+    font-size:12px;font-family:var(--mono);padding:5px 10px;border-radius:20px;border:1px solid var(--line);
+    color:var(--ink-soft);background:var(--panel);
+  }
+  .chip b{color:var(--ink);}
+  .chip.reg{border-color:var(--brass);color:var(--brass);}
+  .chip.unreg{border-color:var(--gauge);color:var(--gauge);}
+
+  /* table */
+  .table-shell{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
+  }
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  thead th{
+    text-align:left;padding:11px 12px;background:var(--ink);color:#fff;font-size:11.5px;
+    letter-spacing:.05em;font-weight:600;position:sticky;top:0;
+  }
+  tbody tr{border-top:1px solid var(--line-soft);}
+  tbody tr:hover{background:#f6f8fa;}
+  tbody tr.cover-row{background:#fafbfc;}
+  td{padding:10px 12px;vertical-align:middle;}
+  td.code{font-family:var(--mono);font-size:14px;color:var(--ink-soft);white-space:nowrap;}
+  td.title{max-width:260px;}
+  .doc-title-link{color:var(--ink);text-decoration:none;border-bottom:1px dashed var(--brass);}
+  .doc-title-link:hover{color:var(--brass);border-bottom-style:solid;}
+  .doc-cat{
+    display:inline-block;font-size:10.5px;font-family:var(--mono);padding:2px 6px;border-radius:2px;
+    margin-right:6px;letter-spacing:.03em;
+  }
+  .doc-cat.manual{background:var(--gauge-soft);color:var(--gauge);}
+  .doc-cat.proc{background:var(--brass-soft);color:var(--brass);}
+  .rev-badge{
+    font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink);
+    background:var(--line-soft);padding:2px 7px;border-radius:2px;
+  }
+  .status-pill{
+    display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:4px 9px;border-radius:20px;
+  }
+  .status-pill.ok{background:var(--brass-soft);color:var(--brass);}
+  .status-pill.no{background:var(--gauge-soft);color:var(--gauge);}
+  .status-pill i{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;}
+  .filename{font-size:12px;color:var(--ink-soft);word-break:break-all;}
+  .actions{display:flex;gap:6px;flex-wrap:wrap;white-space:nowrap;}
+
+  .empty-row td{padding:40px 12px;text-align:center;color:#8b95a3;font-size:13px;}
+
+  /* modal */
+  .overlay{
+    position:fixed;inset:0;background:rgba(16,24,38,.55);display:none;align-items:center;justify-content:center;
+    z-index:600;padding:20px;
+  }
+  .overlay.open{display:flex;}
+  .modal{
+    background:#fff;border-radius:4px;width:100%;max-width:480px;max-height:85vh;overflow:auto;
+    box-shadow:0 20px 60px rgba(0,0,0,.3);
+  }
+  .modal-head{
+    padding:16px 20px;border-bottom:1px solid var(--line-soft);display:flex;justify-content:space-between;align-items:center;
+  }
+  .modal-head h3{margin:0;font-size:15px;font-family:var(--serif);}
+  .modal-head .code-tag{font-family:var(--mono);font-size:11px;color:var(--ink-soft);}
+  .modal-body{padding:18px 20px;}
+  .modal-foot{padding:14px 20px;border-top:1px solid var(--line-soft);display:flex;justify-content:flex-end;gap:8px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12.5px;color:var(--ink-soft);margin-bottom:5px;font-weight:600;}
+  .field input[type=text], .field input[type=date]{
+    width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);font-size:13.5px;
+    font-family:var(--mono);
+  }
+  .field input[type=file]{width:100%;font-size:12.5px;padding:8px 0;}
+  .close-x{border:none;background:transparent;font-size:18px;padding:2px 6px;color:var(--ink-soft);}
+  .close-x:hover{background:transparent;color:var(--ink);}
+
+  .history-list{list-style:none;margin:0;padding:0;}
+  .history-list li{
+    display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line-soft);
+    font-size:13px;gap:10px;
+  }
+  .history-list li:last-child{border-bottom:none;}
+  .history-meta{display:flex;flex-direction:column;gap:2px;}
+  .history-meta .rv{font-family:var(--mono);font-weight:700;}
+  .history-meta .fn{font-size:11.5px;color:#8b95a3;word-break:break-all;}
+  .hist-reason-view{margin-top:3px;}
+  .hist-reason-text{font-size:12px;color:var(--ink-soft);word-break:break-all;}
+  .history-empty{color:#8b95a3;font-size:13px;padding:14px 0;text-align:center;}
+
+  /* toast */
+  #toastHost{position:fixed;bottom:22px;right:22px;display:flex;flex-direction:column;gap:8px;z-index:200;}
+
+  /* ID/비밀번호 인증 게이트 */
+  .hidden{display:none !important;}
+  #authGate{
+    position:fixed;inset:0;z-index:500;display:flex;align-items:center;justify-content:center;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(14,90,74,.14), transparent 45%),
+      radial-gradient(circle at 80% 80%, rgba(199,106,43,.10), transparent 45%),
+      var(--ink);
+    padding:20px;
+  }
+  .gate-card{
+    background:var(--panel);width:100%;max-width:380px;border-radius:4px;
+    box-shadow:0 30px 80px rgba(0,0,0,.45);overflow:hidden;
+  }
+  .gate-head{
+    padding:22px 26px 16px;border-bottom:1px solid var(--line-soft);text-align:center;
+  }
+  .gate-head .mark{
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;color:var(--brass);
+    border:1px solid var(--brass);display:inline-block;padding:3px 8px;border-radius:2px;margin-bottom:10px;
+  }
+  .gate-head h2{font-family:var(--serif);font-size:19px;margin:0 0 4px;}
+  .gate-head p{font-size:12px;color:var(--ink-soft);margin:0;font-family:var(--mono);}
+  .gate-body{padding:22px 26px 8px;}
+  .gate-body .field{margin-bottom:13px;}
+  .gate-body .field label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:5px;font-weight:600;}
+  .gate-body input[type=text], .gate-body input[type=password]{
+    width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:var(--radius);font-size:13.5px;
+    font-family:var(--mono);
+  }
+  .gate-foot{padding:16px 26px 24px;display:flex;flex-direction:column;gap:8px;}
+  .gate-foot button{width:100%;padding:10px;}
+  .gate-error{
+    font-size:12px;color:var(--danger);text-align:center;min-height:16px;margin-top:2px;
+  }
+  .gate-divider{display:flex;align-items:center;gap:10px;margin:2px 0 4px;color:#9aa4b1;font-size:11px;font-family:var(--mono);}
+  .gate-divider::before,.gate-divider::after{content:'';flex:1;height:1px;background:var(--line);}
+  button.google-btn{
+    display:flex;align-items:center;justify-content:center;gap:9px;
+    background:#fff;border-color:var(--line);color:var(--ink);
+  }
+  button.google-btn:hover{background:#f6f8fa;color:var(--ink);border-color:var(--ink-soft);}
+  button.google-btn svg{width:16px;height:16px;flex:none;}
+  .gate-switch{
+    text-align:center;font-size:12px;color:var(--ink-soft);margin-top:4px;
+  }
+  .gate-switch a{color:var(--brass);cursor:pointer;text-decoration:underline;}
+  .toast{
+    background:var(--ink);color:#fff;padding:11px 16px;border-radius:3px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.25);
+    max-width:320px;animation:in .2s ease;
+  }
+  .toast.err{background:var(--danger);}
+  .toast.ok{background:var(--brass);}
+  @keyframes in{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+  .footnote{margin-top:18px;font-size:11.5px;color:#8b95a3;text-align:center;}
+
+  @media(max-width:760px){
+    thead{display:none;}
+    table,tbody,tr,td{display:block;width:100%;}
+    tbody tr{padding:12px;border-top:6px solid var(--paper);}
+    td{padding:4px 0;}
+    td.code{white-space:normal;}
+    .actions{margin-top:8px;}
+  }
+</style>
+</head>
+<body>
+
+<!-- Firebase 인증 게이트 -->
+<div id="authGate">
+  <div class="gate-card">
+    <div class="gate-head">
+      <span class="mark">DOC-CTRL · SECURE</span>
+      <h2>KOLAS 교정품질 문서관리</h2>
+      <p id="gateSubtitle">이메일과 비밀번호로 로그인하세요</p>
+    </div>
+
+    <!-- Firebase 미설정 안내 -->
+    <div class="gate-body hidden" id="fbNotConfigured">
+      <div class="gate-error" style="color:var(--ink-soft);text-align:left;line-height:1.6;">
+        아직 Firebase 인증 설정이 되어있지 않습니다.<br>
+        아래 <b>"Firebase 설정하기"</b> 버튼을 눌러 프로젝트 정보를 입력해주세요.
+      </div>
+    </div>
+    <div class="gate-foot hidden" id="fbNotConfiguredFoot">
+      <button class="primary" id="btnOpenFbSetupFromGate">Firebase 설정하기</button>
+    </div>
+
+    <!-- 로그인 폼 -->
+    <div class="gate-body hidden" id="loginForm">
+      <div class="field">
+        <label>이메일</label>
+        <input type="text" id="loginId" autocomplete="username" placeholder="name@example.com">
+      </div>
+      <div class="field">
+        <label>비밀번호</label>
+        <input type="password" id="loginPw" autocomplete="current-password">
+      </div>
+      <div class="gate-error" id="loginError"></div>
+    </div>
+    <div class="gate-foot hidden" id="loginFoot">
+      <button class="primary" id="btnLoginSubmit">로그인</button>
+      <div class="gate-divider">또는</div>
+      <button class="google-btn" id="btnGoogleLoginGate" type="button">
+        <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.9 29.4 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/>
+          <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 16.3 4 9.6 8.3 6.3 14.7z"/>
+          <path fill="#4CAF50" d="M24 44c5.5 0 10.4-2.1 14.2-5.6l-6.6-5.6C29.5 34.7 26.9 36 24 36c-5.4 0-9.9-3.1-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
+          <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.7 2-2 3.8-3.7 5.1l6.6 5.6C41.9 36 44 30.5 44 24c0-1.3-.1-2.7-.4-3.5z"/>
+        </svg>
+        Google 계정으로 로그인
+      </button>
+      <div class="gate-switch"><a id="linkForgotPw">비밀번호를 잊으셨나요?</a></div>
+      <div class="gate-switch" style="margin-top:6px;color:#8b95a3;">계정은 관리자가 Firebase 콘솔에서 발급합니다.</div>
+      <div class="gate-error" id="googleLoginError"></div>
+    </div>
+
+    <!-- 항상 보이는 Firebase 설정 변경 링크 (설정이 잘못되어도 항상 여기로 돌아올 수 있도록) -->
+    <div style="padding:12px 26px 20px;border-top:1px solid var(--line-soft);text-align:center;">
+      <a id="linkOpenFbSetupAlways" style="font-size:11.5px;color:#8b95a3;cursor:pointer;text-decoration:underline;">Firebase 설정 변경</a>
+    </div>
+  </div>
+</div>
+
+<div class="wrap hidden" id="appRoot">
+
+
+  <header class="top">
+    <div class="brand-block">
+      <div>
+        <h1>KOLAS 교정품질 문서관리</h1>
+        <div class="subtitle">DK-CQM / DK-CQP · 매뉴얼 및 절차서 최신본 관리대장</div>
+      </div>
+      <span class="brand-mark">DOC-CTRL</span>
+    </div>
+    <div class="auth-block">
+      <span id="loggedInAs" class="subtitle" style="margin:0;"></span>
+      <span id="myRoleBadge" class="chip" style="display:none;"></span>
+      <span id="statusDot" class="status-dot off"></span>
+      <span id="statusText">Google 계정 미연결</span>
+      <button id="btnSettings" class="ghost small">설정</button>
+      <button id="btnAuth" class="primary small">Google 로그인</button>
+      <button id="btnLogout" class="ghost small">로그아웃</button>
+    </div>
+  </header>
+
+  <div id="settingsPanel" class="settings">
+    <h3>Google Drive 연동 설정</h3>
+    <div class="row">
+      <label>OAuth Client ID</label>
+      <input type="text" id="inputClientId" placeholder="xxxxxxxx.apps.googleusercontent.com">
+    </div>
+    <div class="row">
+      <label>Drive 폴더명</label>
+      <input type="text" id="inputFolderName" placeholder="KOLAS_품질문서">
+    </div>
+    <div class="row">
+      <button id="btnSaveSettings" class="primary small">저장</button>
+      <button id="btnResyncFolder" class="ghost small">Drive 폴더 재검색</button>
+    </div>
+    <div class="hint">
+      ① Google Cloud Console에서 OAuth 2.0 클라이언트 ID(웹 애플리케이션)를 생성하고, 승인된 자바스크립트 원본에 이 페이지 접속 주소를 등록하세요.<br>
+      ② 스코프는 drive.file(앱이 생성한 파일만 접근)만 사용하므로 기존 Drive 파일에는 접근하지 않습니다.<br>
+      ③ 최초 로그인 시 Drive에 지정한 폴더가 자동 생성되고, 그 안에 metadata.json(문서대장)과 한글파일들이 저장됩니다.<br>
+      ④ <b>여기서 저장하면 이 브라우저에만 적용됩니다.</b> 팀원 전체에게 자동 적용하려면, 관리자가 파일 상단의 <code>DEFAULT_GOOGLE_CLIENT_ID</code> 코드에 값을 직접 입력한 뒤 다시 배포하세요. Client ID는 비밀값이 아니라 공개되어도 안전합니다.
+    </div>
+    <h3 style="margin-top:18px;">Firebase 로그인 서버 설정</h3>
+    <div class="row">
+      <button id="btnOpenFbSetupFromSettings" class="ghost small">Firebase 프로젝트 정보 설정</button>
+      <span class="hint" id="fbStatusMsg"></span>
+    </div>
+    <div class="hint">
+      Firebase 콘솔(console.firebase.google.com)에서 프로젝트를 만들고 Authentication → Sign-in method에서 "이메일/비밀번호"를 사용 설정하세요.
+      팀원 계정은 Authentication → Users 탭에서 관리자가 직접 추가/삭제합니다.<br>
+      <b>여기서 저장하면 이 브라우저에만 적용됩니다.</b> 팀원 전체에게 자동 적용하려면, 관리자가 파일 상단의 <code>DEFAULT_FB_CONFIG</code> 코드에 값을 직접 입력한 뒤 다시 배포하세요. apiKey/authDomain 등도 공개되어도 안전한 값입니다(보안은 Firebase 서버 규칙으로 보호됩니다).
+    </div>
+    <h3 style="margin-top:18px;">사용자 권한 관리</h3>
+    <div class="hint hidden" id="roleAdminNotice">권한 등급 관리는 관리자(master) 계정만 가능합니다. 본인 권한은 아래 목록에서 확인할 수 있습니다.</div>
+    <div id="roleManagerBody">
+      <div id="roleList"></div>
+      <div class="row" style="margin-top:10px;">
+        <button id="btnRefreshRoles" class="ghost small">목록 새로고침</button>
+      </div>
+      <div class="hint">
+        <b>master(관리자)</b>: 등록·수정·삭제 모두 가능 &nbsp;/&nbsp; <b>approver(편집자)</b>: 등록·수정 가능(삭제 불가) &nbsp;/&nbsp; <b>reviewer·author(조회자)</b>: 열람·다운로드만 가능(등록·수정·삭제 불가, 서명 단계 구분용).<br>
+        권한 정보는 Firestore <code>signers/{'{'}uid{'}'}</code> 문서(<code>role</code> 필드)에 저장되며, 같은 Firebase 프로젝트를 쓰는 팀원 전체에 공통 적용됩니다.<br>
+        최초로 로그인한 계정은 자동으로 <b>master</b>로 등록되고, 이후 신규 로그인 계정은 기본값 <b>author</b>로 등록됩니다.<br>
+        Firestore는 uid 기준이라 <b>로그인한 적이 있는 사용자만</b> 아래 목록에 나타납니다. 아직 로그인하지 않은 팀원의 권한을 미리 지정할 수는 없습니다.
+      </div>
+    </div>
+    <h3 style="margin-top:18px;">내 비밀번호 변경</h3>
+    <div class="row">
+      <label>현재 비밀번호</label>
+      <input type="password" id="inputCurPw" style="max-width:200px;">
+    </div>
+    <div class="row">
+      <label>새 비밀번호</label>
+      <input type="password" id="inputNewPw" style="max-width:200px;">
+    </div>
+    <div class="row">
+      <button id="btnChangeAuth" class="primary small">비밀번호 변경</button>
+      <span class="hint" id="changeAuthMsg"></span>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-box">
+      <span>🔍</span>
+      <input type="text" id="searchInput" placeholder="문서번호 또는 문서명 검색">
+    </div>
+    <div class="chips">
+      <span class="chip">전체 <b id="chipTotal">0</b></span>
+      <span class="chip reg">등록됨 <b id="chipReg">0</b></span>
+      <span class="chip unreg">미등록 <b id="chipUnreg">0</b></span>
+    </div>
+    <button class="primary small" id="btnAddDoc">+ 문서 추가</button>
+  </div>
+
+  <div class="table-shell">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:16%">문서번호</th>
+          <th style="width:26%">문서명</th>
+          <th style="width:9%">리비전</th>
+          <th style="width:10%">개정일</th>
+          <th style="width:10%">상태</th>
+          <th style="width:16%">등록 파일</th>
+          <th style="width:13%">동작</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        <tr class="empty-row"><td colspan="7">Google 로그인 후 문서대장을 불러옵니다.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footnote">본 프로그램은 각 문서의 「최신본 한글파일」만 관리합니다. 문서 개정 이력과 과거 버전은 이력보기에서 확인할 수 있습니다.</div>
+</div>
+
+<!-- 등록/교체 모달 -->
+<div class="overlay" id="overlayUpload">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h3>최신본 등록 / 교체</h3>
+        <div class="code-tag" id="uploadCodeTag"></div>
+      </div>
+      <button class="close-x" data-close="overlayUpload">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>한글 파일 선택 (.hwp / .hwpx)</label>
+        <input type="file" id="uploadFileInput" accept=".hwp,.hwpx">
+      </div>
+      <div class="field">
+        <label>리비전 (예: R20)</label>
+        <input type="text" id="uploadRevInput">
+      </div>
+      <div class="field">
+        <label>개정일</label>
+        <input type="date" id="uploadDateInput">
+      </div>
+      <div class="field">
+        <label>개정 사유 (선택)</label>
+        <input type="text" id="uploadReasonInput" placeholder="예: 측정불확도 산정기준 변경에 따른 개정">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="ghost" data-close="overlayUpload">취소</button>
+      <button class="primary" id="btnConfirmUpload">Drive에 등록</button>
+    </div>
+  </div>
+</div>
+
+<!-- PDF 첨부 모달 (원본이 PDF가 아닐 때 인쇄/열람용 PDF 별도 첨부) -->
+<div class="overlay" id="overlayUploadPdf">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h3>PDF 첨부 등록 / 교체</h3>
+        <div class="code-tag" id="uploadPdfCodeTag"></div>
+      </div>
+      <button class="close-x" data-close="overlayUploadPdf">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="hint">등록된 원본 파일이 PDF가 아닐 경우, PDF 다운로드 기능을 쓰려면 별도로 PDF 파일을 첨부해야 합니다.</div>
+      <div class="field">
+        <label>PDF 파일 선택 (.pdf)</label>
+        <input type="file" id="uploadPdfFileInput" accept=".pdf,application/pdf">
+      </div>
+      <div class="hint" id="uploadPdfCurrentName"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="ghost" data-close="overlayUploadPdf">취소</button>
+      <button class="primary" id="btnConfirmUploadPdf">PDF 등록</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase 설정 모달 -->
+<div class="overlay" id="overlayFbSetup">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Firebase 프로젝트 연결</h3>
+      <button class="close-x" data-close="overlayFbSetup">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>apiKey</label>
+        <input type="text" id="fbApiKey" placeholder="AIzaSy...">
+      </div>
+      <div class="field">
+        <label>authDomain</label>
+        <input type="text" id="fbAuthDomain" placeholder="your-project.firebaseapp.com">
+      </div>
+      <div class="field">
+        <label>projectId</label>
+        <input type="text" id="fbProjectId">
+      </div>
+      <div class="field">
+        <label>appId</label>
+        <input type="text" id="fbAppId">
+      </div>
+      <div class="hint">
+        Firebase 콘솔 → 프로젝트 설정 → 일반 → "내 앱"에서 웹 앱을 추가하면 위 값들이 담긴 firebaseConfig 객체가 표시됩니다. 그 값을 그대로 복사해 넣으면 됩니다.
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="ghost" data-close="overlayFbSetup">취소</button>
+      <button class="primary" id="btnSaveFbConfig">저장하고 연결</button>
+    </div>
+  </div>
+</div>
+
+<!-- 문서 추가/수정 모달 -->
+<div class="overlay" id="overlayDocForm">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="docFormTitle">신규 문서 추가</h3>
+      <button class="close-x" data-close="overlayDocForm">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>구분</label>
+        <input type="text" id="docFormCat" placeholder="매뉴얼 / 절차서 / 기타">
+      </div>
+      <div class="field">
+        <label>문서번호</label>
+        <input type="text" id="docFormCode" placeholder="예: DK-CQP-27">
+      </div>
+      <div class="field">
+        <label>문서명</label>
+        <input type="text" id="docFormTitleInput" placeholder="예: 교정품질 절차서(신규 항목)">
+      </div>
+      <div class="field">
+        <label>리비전</label>
+        <input type="text" id="docFormRev" placeholder="예: R00">
+      </div>
+      <div class="field">
+        <label>개정일</label>
+        <input type="date" id="docFormDate">
+      </div>
+      <div class="field">
+        <label>연결 링크 URL (선택, 문서명 클릭 시 이동)</label>
+        <input type="text" id="docFormLink" placeholder="예: https://example.com/doc">
+      </div>
+      <div class="field hidden" id="docFormPdfWrap">
+        <label>첨부 PDF (원본이 PDF가 아닐 때 인쇄용)</label>
+        <div class="hint" id="docFormPdfStatus"></div>
+        <div class="row" style="margin-top:6px;">
+          <button type="button" class="ghost small" id="btnDocFormPdfAttach">PDF 첨부/교체</button>
+          <button type="button" class="ghost small danger-btn hidden" id="btnDocFormPdfDelete">PDF 삭제</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="ghost" data-close="overlayDocForm">취소</button>
+      <button class="primary" id="btnConfirmDocForm">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 이력 모달 -->
+<div class="overlay" id="overlayHistory">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h3>개정 이력</h3>
+        <div class="code-tag" id="historyCodeTag"></div>
+      </div>
+      <button class="close-x" data-close="overlayHistory">✕</button>
+    </div>
+    <div class="modal-body">
+      <ul class="history-list" id="historyList"></ul>
+    </div>
+    <div class="modal-foot">
+      <button class="ghost" data-close="overlayHistory">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 삭제 확인 모달 -->
+<div class="overlay" id="overlayDelete">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-head">
+      <h3>등록 파일 삭제</h3>
+      <button class="close-x" data-close="overlayDelete">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13.5px;line-height:1.6;margin:0;" id="deleteMsg"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="ghost" data-close="overlayDelete">취소</button>
+      <button class="danger-btn" id="btnConfirmDelete">삭제</button>
+    </div>
+  </div>
+</div>
+
+<!-- 비밀번호 재확인 모달 (교체/삭제/개정사유 변경 시 본인 확인) -->
+<div class="overlay" id="overlayPwConfirm">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-head">
+      <h3>본인 확인</h3>
+      <button class="close-x" id="btnPwConfirmCloseX">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;line-height:1.6;margin:0 0 10px;color:var(--ink-soft);" id="pwConfirmLabel"></p>
+      <label>로그인 비밀번호</label>
+      <input type="password" id="pwConfirmInput" autocomplete="current-password">
+      <p style="font-size:12px;color:var(--danger);min-height:16px;margin:6px 0 0;" id="pwConfirmError"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="ghost" id="btnPwConfirmCancel">취소</button>
+      <button class="primary" id="btnPwConfirmOk">확인</button>
+    </div>
+  </div>
+</div>
+
+<div id="toastHost"></div>
+
+<script>
+/* ============ 기본 문서대장 데이터 ============ */
+const DEFAULT_DOCS = [
+  ["DK-CQM-01","매뉴얼","교정품질 매뉴얼","R19","250818"],
+  ["DK-CQP-00","절차서","교정품질 절차서(표지-목차)제정","R00","250818"],
+  ["DK-CQP-01","절차서","교정품질 절차서(공평성 관리)","R05","250818"],
+  ["DK-CQP-02","절차서","교정품질 절차서(기밀유지 및 배상책임)","R13","250818"],
+  ["DK-CQP-03","절차서","교정품질 절차서(조직운영)","R03","250818"],
+  ["DK-CQP-04","절차서","교정품질 절차서(인원운영)","R16","250818"],
+  ["DK-CQP-05","절차서","교정품질 절차서(시설 및 환경관리)","R18","250818"],
+  ["DK-CQP-06","절차서","교정품질 절차서(장비관리)","R21","250818"],
+  ["DK-CQP-07","절차서","교정품질 절차서(측정의 소급성)","R16","250818"],
+  ["DK-CQP-08","절차서","교정품질 절차서(외부 제공 제품 및 서비스)","R14","250818"],
+  ["DK-CQP-09","절차서","교정품질 절차서(의뢰, 입찰 및 계약검토)","R18","250818"],
+  ["DK-CQP-10","절차서","교정품질 절차서(교정위탁)","R17","250818"],
+  ["DK-CQP-11","절차서","교정품질 절차서(교정방법관리)","R19","250818"],
+  ["DK-CQP-12","절차서","교정품질 절차서(교정대상 측정기)","R11","250818"],
+  ["DK-CQP-13","절차서","교정품질 절차서(기술기록)","R03","250818"],
+  ["DK-CQP-14","절차서","교정품질 절차서(불확도 추정 및 평가)","R14","250818"],
+  ["DK-CQP-15","절차서","교정품질 절차서(결과의 유효성 보장)","R12","250818"],
+  ["DK-CQP-16","절차서","교정품질 절차서(결과보고)","R27","250818"],
+  ["DK-CQP-17","절차서","교정품질 절차서(불만처리)","R15","250818"],
+  ["DK-CQP-18","절차서","교정품질 절차서(부적합 작업관리)","R21","250818"],
+  ["DK-CQP-19","절차서","교정품질 절차서(데이터 및 정보관리)","R11","250818"],
+  ["DK-CQP-20","절차서","교정품질 절차서(현장교정)","R11","250818"],
+  ["DK-CQP-21","절차서","교정품질 절차서(문서관리)","R19","250818"],
+  ["DK-CQP-22","절차서","교정품질 절차서(기록관리)","R17","250818"],
+  ["DK-CQP-23","절차서","교정품질 절차서(리스크와 기회 분석)","R05","250818"],
+  ["DK-CQP-24","절차서","교정품질 절차서(개선 및 시정조치)","R17","250818"],
+  ["DK-CQP-25","절차서","교정품질 절차서(내부심사)","R18","251209"],
+  ["DK-CQP-26","절차서","교정품질 절차서(경영검토)","R16","250818"]
+].map(([code,cat,title,rev,date])=>({
+  code, cat, title,
+  currentRev: rev, currentDate: date,
+  driveFileId: null, driveFileName: null,
+  pdfFileId: null, pdfFileName: null, pdfStale: false,
+  link: null,
+  history: []
+}));
+
+/* ============ 상태 ============ */
+const LS_CLIENT_ID = 'kolas_doc_client_id';
+const LS_FOLDER_NAME = 'kolas_doc_folder_name';
+const DEFAULT_FOLDER_NAME = 'KOLAS_품질문서';
+
+/* ▼▼▼ 관리자 전용: 팀 공용 Google OAuth Client ID를 여기에 한 번만 입력하면
+   팀원들은 별도 설정 없이 로그인만으로 Drive 연동이 자동 적용됩니다. ▼▼▼ */
+const DEFAULT_GOOGLE_CLIENT_ID = '895759994864-b1nhf6ir92fcioufor2k986s25an0hin.apps.googleusercontent.com';
+/* ▲▲▲ 예: '123456789-abcdefghijklmnop.apps.googleusercontent.com' ▲▲▲ */
+const SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
+let state = {
+  accessToken: null,
+  tokenClient: null,
+  silentAttempt: false,
+  folderId: null,
+  metaFileId: null,
+  docs: [],
+  roles: {},        // { uid: { email: 'user@example.com', role: 'master'|'approver'|'reviewer'|'author' } }
+  myRole: 'author',
+  filterText: ''
+};
+
+/* ============ 권한(역할) ============ */
+// Firestore signers/{uid} 문서의 role 필드 값. master=관리자, approver=편집자, reviewer/author=조회자(서명 단계 구분용, 권한상 동일)
+const ROLE_LABELS = { master: '관리자(master)', approver: '편집자(approver)', reviewer: '조회자(reviewer)', author: '조회자(author)' };
+function myEmailLower(){
+  return ((fbAuth && fbAuth.currentUser && fbAuth.currentUser.email) || '').toLowerCase();
+}
+function myUid(){
+  return (fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid) || '';
+}
+function computeMyRole(){
+  const uid = myUid();
+  const rec = state.roles[uid];
+  state.myRole = (rec && rec.role) || 'author';
+  const badge = document.getElementById('myRoleBadge');
+  if(uid){
+    badge.style.display = '';
+    badge.textContent = '권한: ' + (ROLE_LABELS[state.myRole] || state.myRole);
+    badge.className = 'chip' + (state.myRole==='master' ? ' reg' : ((state.myRole==='reviewer'||state.myRole==='author') ? ' unreg' : ''));
+  } else {
+    badge.style.display = 'none';
+  }
+}
+function isAdmin(){ return state.myRole === 'master'; }
+function canEdit(){ return state.myRole === 'master' || state.myRole === 'approver'; }
+function requirePermission(level){
+  // level: 'edit' (등록·수정, master/approver 허용) | 'admin' (삭제 등, master만 허용)
+  if(level === 'edit' && !canEdit()){ toast('등록/수정 권한이 없습니다. 관리자에게 문의해주세요.', 'err'); return false; }
+  if(level === 'admin' && !isAdmin()){ toast('이 작업은 관리자만 할 수 있습니다.', 'err'); return false; }
+  return true;
+}
+
+/* ============ 비밀번호 재확인 (교체/삭제/개정사유 변경 시 본인 로그인 비밀번호로 재인증) ============ */
+function confirmWithPassword(label){
+  return new Promise((resolve)=>{
+    if(!fbAuth || !fbAuth.currentUser){ toast('로그인 상태가 아닙니다.', 'err'); resolve(false); return; }
+    const labelEl = document.getElementById('pwConfirmLabel');
+    const input = document.getElementById('pwConfirmInput');
+    const errEl = document.getElementById('pwConfirmError');
+    const btnOk = document.getElementById('btnPwConfirmOk');
+    const btnCancel = document.getElementById('btnPwConfirmCancel');
+    const btnCloseX = document.getElementById('btnPwConfirmCloseX');
+
+    labelEl.textContent = label || '이 작업을 계속하려면 로그인 비밀번호를 입력해주세요.';
+    input.value = '';
+    errEl.textContent = '';
+    openModal('overlayPwConfirm');
+    setTimeout(()=>input.focus(), 50);
+
+    let settled = false;
+    const finish = (result)=>{
+      if(settled) return;
+      settled = true;
+      btnOk.removeEventListener('click', onOk);
+      btnCancel.removeEventListener('click', onCancel);
+      btnCloseX.removeEventListener('click', onCancel);
+      input.removeEventListener('keydown', onKeydown);
+      closeModal('overlayPwConfirm');
+      resolve(result);
+    };
+    const onCancel = ()=> finish(false);
+    const onKeydown = (e)=>{ if(e.key==='Enter'){ e.preventDefault(); onOk(); } };
+    const onOk = async ()=>{
+      const pw = input.value;
+      if(!pw){ errEl.textContent = '비밀번호를 입력해주세요.'; return; }
+      btnOk.disabled = true; btnOk.textContent = '확인 중...';
+      try{
+        const cred = firebase.auth.EmailAuthProvider.credential(fbAuth.currentUser.email, pw);
+        await fbAuth.currentUser.reauthenticateWithCredential(cred);
+        finish(true);
+      }catch(err){
+        errEl.textContent = fbErrorToKorean(err);
+      }finally{
+        btnOk.disabled = false; btnOk.textContent = '확인';
+      }
+    };
+    btnOk.addEventListener('click', onOk);
+    btnCancel.addEventListener('click', onCancel);
+    btnCloseX.addEventListener('click', onCancel);
+    input.addEventListener('keydown', onKeydown);
+  });
+}
+function updateGlobalButtonStates(){
+  const btn = document.getElementById('btnAddDoc');
+  if(btn) btn.disabled = !canEdit();
+  const settingsBtn = document.getElementById('btnSettings');
+  if(settingsBtn) settingsBtn.disabled = !isAdmin();
+}
+
+/* ============ 유틸 ============ */
+function toast(msg, type){
+  const host = document.getElementById('toastHost');
+  const el = document.createElement('div');
+  el.className = 'toast' + (type ? ' '+type : '');
+  el.textContent = msg;
+  host.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 3400);
+}
+let modalZCounter = 600;
+function openModal(id){
+  const el = document.getElementById(id);
+  modalZCounter += 1;
+  el.style.zIndex = modalZCounter;
+  el.classList.add('open');
+}
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('[data-close]').forEach(b=>{
+  b.addEventListener('click', ()=>closeModal(b.getAttribute('data-close')));
+});
+const NO_OUTSIDE_CLOSE = ['overlayUpload', 'overlayUploadPdf', 'overlayHistory', 'overlayDocForm', 'overlayPwConfirm'];
+document.querySelectorAll('.overlay').forEach(ov=>{
+  if(NO_OUTSIDE_CLOSE.includes(ov.id)) return;
+  ov.addEventListener('click', (e)=>{ if(e.target===ov) ov.classList.remove('open'); });
+});
+
+function loadSettings(){
+  document.getElementById('inputClientId').value = getClientId();
+  document.getElementById('inputFolderName').value = getFolderName();
+}
+function getClientId(){ return localStorage.getItem(LS_CLIENT_ID) || DEFAULT_GOOGLE_CLIENT_ID; }
+function getFolderName(){ return localStorage.getItem(LS_FOLDER_NAME) || DEFAULT_FOLDER_NAME; }
+
+/* ============ Google 인증 ============ */
+function initAuth(){
+  const clientId = getClientId();
+  if(!clientId){ return; }
+  state.tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: SCOPE,
+    callback: async (resp)=>{
+      const wasSilent = state.silentAttempt;
+      state.silentAttempt = false;
+      if(resp.error){
+        // 자동(silent) 재연결 시도 실패는 흔한 상황(동의 만료 등)이므로 조용히 무시하고,
+        // 사용자가 직접 누른 로그인 시도가 실패했을 때만 오류를 표시
+        if(!wasSilent) toast('로그인 실패: '+resp.error, 'err');
+        return;
+      }
+      state.accessToken = resp.access_token;
+      setAuthedUI(true);
+      if(!wasSilent) toast('Google Drive 연결됨', 'ok');
+      await bootstrapDrive();
+    }
+  });
+}
+function attemptSilentGoogleAuth(){
+  const clientId = getClientId();
+  if(!clientId) return;
+  if(!state.tokenClient) initAuth();
+  if(!state.tokenClient) return;
+  state.silentAttempt = true;
+  // prompt:''(빈 값)은 이전에 이 계정으로 동의한 이력이 있으면 팝업/클릭 없이 조용히 토큰을 재발급받고,
+  // 동의 이력이 없거나 만료되었으면 별도 알림 없이 조용히 실패합니다(사용자가 "Google 로그인" 버튼으로 재시도 가능).
+  state.tokenClient.requestAccessToken({ prompt: '' });
+}
+function setAuthedUI(on){
+  document.getElementById('statusDot').className = 'status-dot ' + (on ? 'on' : 'off');
+  document.getElementById('statusText').textContent = on ? 'Drive 연결됨' : 'Google 계정 미연결';
+  document.getElementById('btnAuth').textContent = on ? '재로그인' : 'Google 로그인';
+}
+document.getElementById('btnAuth').addEventListener('click', ()=>{
+  const clientId = getClientId();
+  if(!clientId){
+    toast('먼저 설정에서 OAuth Client ID를 입력해주세요.', 'err');
+    document.getElementById('settingsPanel').classList.add('open');
+    return;
+  }
+  if(!state.tokenClient) initAuth();
+  state.tokenClient.requestAccessToken({ prompt: state.accessToken ? '' : 'consent' });
+});
+document.getElementById('btnSettings').addEventListener('click', ()=>{
+  if(!requirePermission('admin')) return;
+  document.getElementById('settingsPanel').classList.toggle('open');
+});
+document.getElementById('btnSaveSettings').addEventListener('click', ()=>{
+  if(!requirePermission('admin')) return;
+  const cid = document.getElementById('inputClientId').value.trim();
+  const fname = document.getElementById('inputFolderName').value.trim() || DEFAULT_FOLDER_NAME;
+  localStorage.setItem(LS_CLIENT_ID, cid);
+  localStorage.setItem(LS_FOLDER_NAME, fname);
+  toast('설정이 저장되었습니다.', 'ok');
+  initAuth();
+});
+document.getElementById('btnResyncFolder').addEventListener('click', async ()=>{
+  if(!state.accessToken){ toast('먼저 Google 로그인이 필요합니다.', 'err'); return; }
+  state.folderId = null; state.metaFileId = null;
+  await bootstrapDrive();
+});
+
+/* ============ Drive API 헬퍼 ============ */
+async function driveFetch(url, options={}){
+  const headers = Object.assign({}, options.headers, { Authorization: 'Bearer ' + state.accessToken });
+  const res = await fetch(url, Object.assign({}, options, { headers }));
+  if(!res.ok){
+    const text = await res.text().catch(()=> '');
+    throw new Error('Drive API 오류 (' + res.status + '): ' + text.slice(0,200));
+  }
+  return res;
+}
+
+async function findFolder(name){
+  const q = encodeURIComponent(`name='${name.replace(/'/g,"\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`);
+  const data = await res.json();
+  return data.files && data.files.length ? data.files[0].id : null;
+}
+async function createFolder(name){
+  const res = await driveFetch('https://www.googleapis.com/drive/v3/files', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ name, mimeType:'application/vnd.google-apps.folder' })
+  });
+  const data = await res.json();
+  return data.id;
+}
+async function findFileInFolder(name, folderId){
+  const q = encodeURIComponent(`name='${name.replace(/'/g,"\\'")}' and '${folderId}' in parents and trashed=false`);
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`);
+  const data = await res.json();
+  return data.files && data.files.length ? data.files[0].id : null;
+}
+async function createEmptyFile(name, folderId, mimeType){
+  const res = await driveFetch('https://www.googleapis.com/drive/v3/files', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ name, parents:[folderId] })
+  });
+  const data = await res.json();
+  return data.id;
+}
+async function uploadContent(fileId, blobOrString, mimeType){
+  await driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+    method:'PATCH',
+    headers:{'Content-Type': mimeType},
+    body: blobOrString
+  });
+}
+async function downloadContent(fileId){
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+  return await res.blob();
+}
+async function deleteDriveFile(fileId){
+  await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, { method:'DELETE' });
+}
+async function moveFileToFolder(fileId, newParentId, oldParentId){
+  await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?addParents=${newParentId}&removeParents=${oldParentId}`, {
+    method:'PATCH'
+  });
+}
+const ARCHIVE_FOLDER_NAME = '이전버전';
+async function getArchiveFolderId(){
+  if(state.archiveFolderId) return state.archiveFolderId;
+  const q = encodeURIComponent(`name='${ARCHIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and '${state.folderId}' in parents and trashed=false`);
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`);
+  const data = await res.json();
+  let id = data.files && data.files.length ? data.files[0].id : null;
+  if(!id){
+    const cRes = await driveFetch('https://www.googleapis.com/drive/v3/files', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name: ARCHIVE_FOLDER_NAME, mimeType:'application/vnd.google-apps.folder', parents:[state.folderId] })
+    });
+    const cData = await cRes.json();
+    id = cData.id;
+  }
+  state.archiveFolderId = id;
+  return id;
+}
+
+/* ============ 부트스트랩: 폴더/메타데이터 로드 ============ */
+async function bootstrapDrive(){
+  try{
+    const folderName = getFolderName();
+    let folderId = await findFolder(folderName);
+    if(!folderId){ folderId = await createFolder(folderName); toast('Drive 폴더 생성: ' + folderName, 'ok'); }
+    state.folderId = folderId;
+
+    let metaId = await findFileInFolder('metadata.json', folderId);
+    if(!metaId){
+      metaId = await createEmptyFile('metadata.json', folderId, 'application/json');
+      await uploadContent(metaId, JSON.stringify(DEFAULT_DOCS, null, 2), 'application/json');
+      state.docs = JSON.parse(JSON.stringify(DEFAULT_DOCS));
+      toast('문서대장(metadata.json)을 새로 생성했습니다.', 'ok');
+    } else {
+      const blob = await downloadContent(metaId);
+      const text = await blob.text();
+      state.docs = JSON.parse(text);
+    }
+    state.metaFileId = metaId;
+
+    renderTable();
+  }catch(err){
+    console.error(err);
+    toast('Drive 초기화 실패: ' + err.message, 'err');
+  }
+}
+async function saveMetadata(){
+  await uploadContent(state.metaFileId, JSON.stringify(state.docs, null, 2), 'application/json');
+}
+
+/* ============ 권한(역할) - Firestore signers/{uid} ============ */
+async function saveSignerRole(uid, email, role){
+  await fbDb.collection('signers').doc(uid).set({ email: email || '', role }, { merge: true });
+}
+async function deleteSignerRole(uid){
+  await fbDb.collection('signers').doc(uid).delete();
+}
+async function loadSigners(){
+  if(!fbDb || !fbAuth || !fbAuth.currentUser) return;
+  try{
+    const snap = await fbDb.collection('signers').get();
+    const roles = {};
+    snap.forEach(docSnap=>{ roles[docSnap.id] = docSnap.data(); });
+    const uid = myUid();
+    const myEmail = myEmailLower();
+    if(!Object.keys(roles).length){
+      // Firestore signers 컬렉션이 비어있음 -> 최초 로그인 계정을 관리자(master)로 자동 등록
+      await saveSignerRole(uid, myEmail, 'master');
+      roles[uid] = { email: myEmail, role: 'master' };
+      toast('최초 연결 계정이 관리자(master)로 등록되었습니다: ' + myEmail, 'ok');
+    } else if(!roles[uid]){
+      // 처음 로그인하는 계정 -> 기본값 author(조회자)로 자동 등록
+      await saveSignerRole(uid, myEmail, 'author');
+      roles[uid] = { email: myEmail, role: 'author' };
+    } else if(roles[uid].email !== myEmail){
+      // 이메일이 변경된 경우 최신화 (역할은 유지)
+      await saveSignerRole(uid, myEmail, roles[uid].role);
+      roles[uid].email = myEmail;
+    }
+    state.roles = roles;
+    computeMyRole();
+    updateGlobalButtonStates();
+    renderRoleUI();
+    renderTable();
+  }catch(err){
+    console.error(err);
+    toast('권한 정보 로딩 실패(Firestore): ' + err.message, 'err');
+  }
+}
+
+/* ============ 렌더링 ============ */
+function renderTable(){
+  const tbody = document.getElementById('tableBody');
+  const q = state.filterText.trim().toLowerCase();
+  const filtered = state.docs.filter(d => !q || d.code.toLowerCase().includes(q) || d.title.toLowerCase().includes(q));
+
+  const total = state.docs.length;
+  const reg = state.docs.filter(d=>d.driveFileId).length;
+  document.getElementById('chipTotal').textContent = total;
+  document.getElementById('chipReg').textContent = reg;
+  document.getElementById('chipUnreg').textContent = total - reg;
+
+  if(!filtered.length){
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${state.docs.length ? '검색 결과가 없습니다.' : 'Google 로그인 후 문서대장을 불러옵니다.'}</td></tr>`;
+    return;
+  }
+
+  const canE = canEdit();
+  const canD = isAdmin();
+  tbody.innerHTML = filtered.map(d=>{
+    const catClass = d.cat === '매뉴얼' ? 'manual' : 'proc';
+    const registered = !!d.driveFileId;
+    return `
+    <tr data-code="${d.code}">
+      <td class="code">${d.code}</td>
+      <td class="title"><span class="doc-cat ${catClass}">${d.cat}</span>${d.link ? `<a class="doc-title-link" href="${escapeHtml(d.link)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(d.link)}">${escapeHtml(d.title)}</a>` : escapeHtml(d.title)}</td>
+      <td><span class="rev-badge">${d.currentRev}</span></td>
+      <td>${formatDate(d.currentDate)}</td>
+      <td>
+        <span class="status-pill ${registered?'ok':'no'}"><i></i>${registered?'등록됨':'미등록'}</span>
+      </td>
+      <td class="filename">${registered ? escapeHtml(d.driveFileName) : '-'}</td>
+      <td class="actions">
+        <button class="small" data-act="upload" data-code="${d.code}" ${canE?'':'disabled'}>${registered?'교체':'등록'}</button>
+        <button class="small ghost" data-act="download" data-code="${d.code}" ${registered?'':'disabled'}>다운로드</button>
+        <button class="small ghost" data-act="history" data-code="${d.code}">이력</button>
+        <button class="small ghost" data-act="edit" data-code="${d.code}" ${canE?'':'disabled'}>수정</button>
+        <button class="icon-btn ${getPrintableFileId(d)?'ready':''}" data-act="pdf" data-code="${d.code}" title="${getPrintableFileId(d) ? 'PDF 다운로드' : 'PDF가 없습니다. 클릭하여 PDF를 업로드하세요.'}" ${registered?'':'disabled'}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <path d="M14 2v6h6"></path>
+            <text x="12" y="18.5" font-size="7.5" font-family="sans-serif" font-weight="700" text-anchor="middle" stroke="none" fill="currentColor">PDF</text>
+          </svg>
+        </button>
+        <button class="small danger-btn" data-act="delete-file" data-code="${d.code}" ${(registered&&canD)?'':'disabled'}>파일삭제</button>
+        <button class="small danger-btn" data-act="delete-doc" data-code="${d.code}" ${canD?'':'disabled'}>행삭제</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function formatDate(yymmdd){
+  if(!yymmdd || yymmdd.length !== 6) return yymmdd || '-';
+  return `20${yymmdd.slice(0,2)}.${yymmdd.slice(2,4)}.${yymmdd.slice(4,6)}`;
+}
+function todayYYMMDD(){
+  const n = new Date();
+  const yy = String(n.getFullYear()).slice(2);
+  const mm = String(n.getMonth()+1).padStart(2,'0');
+  const dd = String(n.getDate()).padStart(2,'0');
+  return yy+mm+dd;
+}
+function todayISO(){
+  const n = new Date();
+  const yyyy = n.getFullYear();
+  const mm = String(n.getMonth()+1).padStart(2,'0');
+  const dd = String(n.getDate()).padStart(2,'0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+function yymmddToIso(yymmdd){
+  if(!yymmdd || yymmdd.length !== 6) return '';
+  return `20${yymmdd.slice(0,2)}-${yymmdd.slice(2,4)}-${yymmdd.slice(4,6)}`;
+}
+function isoToYymmdd(iso){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso||'');
+  if(!m) return '';
+  return m[1].slice(2) + m[2] + m[3];
+}
+// 개정일(date) 입력창: 비어있는 상태로 클릭하면 오늘 날짜를 기본으로 표시
+['uploadDateInput','docFormDate'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('click', function(){ if(!this.value) this.value = todayISO(); });
+  el.addEventListener('focus', function(){ if(!this.value) this.value = todayISO(); });
+});
+function nextRev(rev){
+  const m = /^R(\d+)$/i.exec(rev||'');
+  if(!m) return '';
+  return 'R' + String(parseInt(m[1],10)+1).padStart(m[1].length,'0');
+}
+
+/* ============ 사용자 권한 관리 UI ============ */
+function renderRoleUI(){
+  const isAdm = isAdmin();
+  document.getElementById('roleManagerBody').classList.toggle('hidden', !isAdm);
+  document.getElementById('roleAdminNotice').classList.toggle('hidden', isAdm);
+  if(!isAdm) return;
+  const list = document.getElementById('roleList');
+  const uids = Object.keys(state.roles).sort((a,b)=>{
+    const ea = (state.roles[a] && state.roles[a].email) || a;
+    const eb = (state.roles[b] && state.roles[b].email) || b;
+    return ea.localeCompare(eb);
+  });
+  if(!uids.length){ list.innerHTML = '<div class="hint">등록된 사용자가 없습니다.</div>'; return; }
+  list.innerHTML = uids.map(uid=>{
+    const rec = state.roles[uid] || {};
+    const label = rec.email || uid;
+    return `
+    <div class="row" data-role-uid="${escapeHtml(uid)}" style="align-items:center;">
+      <label style="min-width:auto;flex:1;font-family:var(--mono);font-size:12.5px;color:var(--ink);">${escapeHtml(label)}</label>
+      <select class="role-select" style="padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius);font-size:12.5px;font-family:var(--mono);">
+        <option value="master" ${rec.role==='master'?'selected':''}>관리자(master)</option>
+        <option value="approver" ${rec.role==='approver'?'selected':''}>편집자(approver)</option>
+        <option value="reviewer" ${rec.role==='reviewer'?'selected':''}>조회자(reviewer)</option>
+        <option value="author" ${rec.role==='author'?'selected':''}>조회자(author)</option>
+      </select>
+      <button class="ghost small" data-remove-role="${escapeHtml(uid)}">삭제</button>
+    </div>`;
+  }).join('');
+}
+function adminCount(){
+  return Object.values(state.roles).filter(r=>r && r.role==='master').length;
+}
+document.getElementById('roleList').addEventListener('change', async (e)=>{
+  const sel = e.target.closest('select.role-select');
+  if(!sel) return;
+  if(!requirePermission('admin')) return;
+  const row = sel.closest('[data-role-uid]');
+  const uid = row.getAttribute('data-role-uid');
+  const rec = state.roles[uid] || {};
+  const newRole = sel.value;
+  if(rec.role === 'master' && newRole !== 'master' && adminCount() <= 1){
+    toast('최소 1명의 관리자(master)가 있어야 합니다.', 'err');
+    sel.value = 'master';
+    return;
+  }
+  const prevRole = rec.role;
+  rec.role = newRole;
+  state.roles[uid] = rec;
+  try{
+    await saveSignerRole(uid, rec.email, newRole);
+    toast(`${rec.email || uid} 권한이 ${ROLE_LABELS[newRole]}(으)로 변경되었습니다.`, 'ok');
+    if(uid === myUid()){ computeMyRole(); updateGlobalButtonStates(); renderTable(); renderRoleUI(); }
+  }catch(err){
+    rec.role = prevRole;
+    sel.value = prevRole;
+    toast('저장 실패: ' + err.message, 'err');
+  }
+});
+document.getElementById('roleList').addEventListener('click', async (e)=>{
+  const btn = e.target.closest('[data-remove-role]');
+  if(!btn) return;
+  if(!requirePermission('admin')) return;
+  const uid = btn.getAttribute('data-remove-role');
+  const rec = state.roles[uid] || {};
+  if(rec.role === 'master' && adminCount() <= 1){
+    toast('최소 1명의 관리자(master)가 있어야 합니다.', 'err');
+    return;
+  }
+  if(!confirm(`${rec.email || uid} 사용자를 권한 목록에서 삭제할까요?`)) return;
+  const backup = state.roles[uid];
+  delete state.roles[uid];
+  try{
+    await deleteSignerRole(uid);
+    renderRoleUI();
+    toast('삭제되었습니다.', 'ok');
+  }catch(err){
+    state.roles[uid] = backup;
+    toast('저장 실패: ' + err.message, 'err');
+  }
+});
+document.getElementById('btnRefreshRoles').addEventListener('click', async ()=>{
+  if(!requireAuth()) return;
+  await loadSigners();
+  toast('권한 목록을 새로고침했습니다.', 'ok');
+});
+
+document.getElementById('searchInput').addEventListener('input', (e)=>{
+  state.filterText = e.target.value;
+  renderTable();
+});
+
+/* ============ 테이블 액션 위임 ============ */
+document.getElementById('tableBody').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-act]');
+  if(!btn) return;
+  const code = btn.getAttribute('data-code');
+  const act = btn.getAttribute('data-act');
+  const doc = state.docs.find(d=>d.code===code);
+  if(!doc) return;
+
+  if(act === 'upload') openUploadModal(doc);
+  if(act === 'download') doDownload(doc);
+  if(act === 'pdf'){
+    if(getPrintableFileId(doc)) doDownloadPdfFile(doc, btn);
+    else openUploadPdfModal(doc);
+  }
+  if(act === 'history') openHistoryModal(doc);
+  if(act === 'edit') openEditDocModal(doc);
+  if(act === 'delete-file') openDeleteModal(doc);
+  if(act === 'delete-doc') openDeleteDocModal(doc);
+});
+
+/* ---- 등록/교체 ---- */
+let activeUploadDoc = null;
+function openUploadModal(doc){
+  if(!requireAuth()) return;
+  if(!requirePermission('edit')) return;
+  activeUploadDoc = doc;
+  document.getElementById('uploadCodeTag').textContent = `${doc.code} · ${doc.title}`;
+  document.getElementById('uploadFileInput').value = '';
+  document.getElementById('uploadRevInput').value = nextRev(doc.currentRev) || doc.currentRev;
+  document.getElementById('uploadDateInput').value = todayISO();
+  document.getElementById('uploadReasonInput').value = '';
+  openModal('overlayUpload');
+}
+document.getElementById('btnConfirmUpload').addEventListener('click', async ()=>{
+  if(!requirePermission('edit')) return;
+  const doc = activeUploadDoc;
+  if(!doc) return;
+  const fileInput = document.getElementById('uploadFileInput');
+  const rev = document.getElementById('uploadRevInput').value.trim();
+  const dateIso = document.getElementById('uploadDateInput').value.trim();
+  const date = isoToYymmdd(dateIso);
+  const reason = document.getElementById('uploadReasonInput').value.trim();
+  const file = fileInput.files[0];
+  if(!file){ toast('한글 파일을 선택해주세요.', 'err'); return; }
+  if(!rev || !date){ toast('리비전과 개정일을 입력해주세요.', 'err'); return; }
+
+  const pwOk = await confirmWithPassword(`${doc.code} 파일을 교체하려면 비밀번호를 확인해주세요.`);
+  if(!pwOk) return;
+
+  const btn = document.getElementById('btnConfirmUpload');
+  btn.disabled = true; btn.textContent = '업로드 중...';
+  try{
+    const ext = file.name.slice(file.name.lastIndexOf('.'));
+    const driveName = `${doc.code}_${rev}_${doc.title}_${date}${ext}`;
+    const fileId = await createEmptyFile(driveName, state.folderId, 'application/octet-stream');
+    await uploadContent(fileId, file, file.type || 'application/octet-stream');
+
+    if(doc.driveFileId){
+      const oldFileId = doc.driveFileId;
+      doc.history.unshift({
+        rev: doc.currentRev, date: doc.currentDate,
+        fileName: doc.driveFileName, fileId: oldFileId,
+        replacedAt: new Date().toISOString(),
+        reason: reason || null
+      });
+      try{
+        const archiveId = await getArchiveFolderId();
+        await moveFileToFolder(oldFileId, archiveId, state.folderId);
+      }catch(e){ console.warn('이전 파일 이동 실패:', e); }
+    }
+    const hadPdfAttachment = !!doc.pdfFileId;
+
+    doc.driveFileId = fileId;
+    doc.driveFileName = driveName;
+    doc.currentRev = rev;
+    doc.currentDate = date;
+    if(hadPdfAttachment) doc.pdfStale = true;
+
+    await saveMetadata();
+    renderTable();
+    closeModal('overlayUpload');
+    toast(`${doc.code} 최신본이 등록되었습니다.`, 'ok');
+    if(hadPdfAttachment){
+      toast(`⚠ ${doc.code} 리비전이 ${rev}(으)로 변경되었습니다. 첨부된 PDF는 이전 리비전 그대로이니 최신본으로 갱신해주세요.`, 'err');
+    }
+  }catch(err){
+    console.error(err);
+    toast('업로드 실패: ' + err.message, 'err');
+  }finally{
+    btn.disabled = false; btn.textContent = 'Drive에 등록';
+  }
+});
+
+/* ---- PDF 첨부 등록/교체 (원본이 PDF가 아닐 때 보조 PDF 첨부) ---- */
+let activePdfDoc = null;
+function openUploadPdfModal(doc){
+  if(!requireAuth()) return;
+  if(!requirePermission('edit')) return;
+  activePdfDoc = doc;
+  document.getElementById('uploadPdfCodeTag').textContent = `${doc.code} · ${doc.title}`;
+  document.getElementById('uploadPdfFileInput').value = '';
+  const nameEl = document.getElementById('uploadPdfCurrentName');
+  if(doc.pdfFileName){
+    nameEl.innerHTML = `현재 첨부: ${escapeHtml(doc.pdfFileName)}` + (doc.pdfStale ? `<br><b style="color:var(--danger);">⚠ 원본이 ${doc.currentRev}(으)로 개정되었지만 이 PDF는 이전 리비전 그대로입니다. 최신본으로 갱신해주세요.</b>` : '');
+  } else {
+    nameEl.textContent = '현재 첨부된 PDF가 없습니다.';
+  }
+  openModal('overlayUploadPdf');
+}
+document.getElementById('btnConfirmUploadPdf').addEventListener('click', async ()=>{
+  if(!requirePermission('edit')) return;
+  const doc = activePdfDoc;
+  if(!doc) return;
+  const fileInput = document.getElementById('uploadPdfFileInput');
+  const file = fileInput.files[0];
+  if(!file){ toast('PDF 파일을 선택해주세요.', 'err'); return; }
+  if(!isPdfFileName(file.name)){ toast('PDF(.pdf) 파일만 첨부할 수 있습니다.', 'err'); return; }
+
+  const pwOk = await confirmWithPassword(`${doc.code}의 PDF 첨부파일을 ${doc.pdfFileId?'교체':'등록'}하려면 비밀번호를 확인해주세요.`);
+  if(!pwOk) return;
+
+  const btn = document.getElementById('btnConfirmUploadPdf');
+  btn.disabled = true; btn.textContent = '업로드 중...';
+  try{
+    const driveName = `${doc.code}_${doc.currentRev}_${doc.title}_${doc.currentDate}.pdf`;
+    const fileId = await createEmptyFile(driveName, state.folderId, 'application/pdf');
+    await uploadContent(fileId, file, 'application/pdf');
+
+    const oldPdfId = doc.pdfFileId;
+    doc.pdfFileId = fileId;
+    doc.pdfFileName = driveName;
+    doc.pdfStale = false;
+    await saveMetadata();
+
+    if(oldPdfId){
+      try{ await deleteDriveFile(oldPdfId); }catch(e){ console.warn('이전 PDF 첨부파일 삭제 실패:', e); }
+    }
+
+    renderTable();
+    if(typeof refreshDocFormPdfSection === 'function') refreshDocFormPdfSection();
+    closeModal('overlayUploadPdf');
+    toast(`${doc.code} PDF 첨부파일이 등록되었습니다.`, 'ok');
+  }catch(err){
+    console.error(err);
+    toast('PDF 업로드 실패: ' + err.message, 'err');
+  }finally{
+    btn.disabled = false; btn.textContent = 'PDF 등록';
+  }
+});
+
+/* ---- 문서 추가/수정 ---- */
+let docFormMode = 'add'; // 'add' | 'edit'
+let docFormTarget = null; // doc being edited (edit 모드일 때)
+
+function openAddDocModal(){
+  if(!requireAuth()) return;
+  if(!requirePermission('edit')) return;
+  docFormMode = 'add';
+  docFormTarget = null;
+  document.getElementById('docFormTitle').textContent = '신규 문서 추가';
+  document.getElementById('docFormCat').value = '절차서';
+  document.getElementById('docFormCode').value = '';
+  document.getElementById('docFormTitleInput').value = '';
+  document.getElementById('docFormRev').value = 'R00';
+  document.getElementById('docFormDate').value = todayISO();
+  document.getElementById('docFormLink').value = '';
+  document.getElementById('docFormPdfWrap').classList.add('hidden');
+  openModal('overlayDocForm');
+}
+function openEditDocModal(doc){
+  if(!requireAuth()) return;
+  if(!requirePermission('edit')) return;
+  docFormMode = 'edit';
+  docFormTarget = doc;
+  document.getElementById('docFormTitle').textContent = '문서 정보 수정';
+  document.getElementById('docFormCat').value = doc.cat;
+  document.getElementById('docFormCode').value = doc.code;
+  document.getElementById('docFormTitleInput').value = doc.title;
+  document.getElementById('docFormRev').value = doc.currentRev;
+  document.getElementById('docFormDate').value = yymmddToIso(doc.currentDate);
+  document.getElementById('docFormLink').value = doc.link || '';
+  refreshDocFormPdfSection();
+  openModal('overlayDocForm');
+}
+function refreshDocFormPdfSection(){
+  const doc = docFormTarget;
+  const wrap = document.getElementById('docFormPdfWrap');
+  if(docFormMode !== 'edit' || !doc || !doc.driveFileId || isPdfFileName(doc.driveFileName)){
+    wrap.classList.add('hidden');
+    return;
+  }
+  wrap.classList.remove('hidden');
+  const statusEl = document.getElementById('docFormPdfStatus');
+  const delBtn = document.getElementById('btnDocFormPdfDelete');
+  if(doc.pdfFileId){
+    statusEl.innerHTML = `현재 첨부: ${escapeHtml(doc.pdfFileName)}` +
+      (doc.pdfStale ? `<br><b style="color:var(--danger);">⚠ 원본이 ${escapeHtml(doc.currentRev)}(으)로 개정되었지만 이 PDF는 이전 리비전 그대로입니다. 최신본으로 갱신해주세요.</b>` : '');
+    delBtn.classList.remove('hidden');
+  } else {
+    statusEl.textContent = '첨부된 PDF가 없습니다.';
+    delBtn.classList.add('hidden');
+  }
+}
+document.getElementById('btnAddDoc').addEventListener('click', ()=>{
+  if(!requirePermission('edit')) return;
+  openAddDocModal();
+});
+
+document.getElementById('btnConfirmDocForm').addEventListener('click', async ()=>{
+  if(!requirePermission('edit')) return;
+  const cat = document.getElementById('docFormCat').value.trim() || '기타';
+  const code = document.getElementById('docFormCode').value.trim();
+  const title = document.getElementById('docFormTitleInput').value.trim();
+  const rev = document.getElementById('docFormRev').value.trim();
+  const dateIso = document.getElementById('docFormDate').value.trim();
+  const date = isoToYymmdd(dateIso);
+  let link = document.getElementById('docFormLink').value.trim();
+
+  if(!code || !title || !rev || !date){ toast('모든 항목을 입력해주세요.', 'err'); return; }
+
+  if(link){
+    if(!/^https?:\/\//i.test(link)) link = 'https://' + link;
+    try{ new URL(link); }catch(e){ toast('연결 링크 URL 형식이 올바르지 않습니다.', 'err'); return; }
+  } else {
+    link = null;
+  }
+
+  const dupe = state.docs.find(d => d.code === code && d !== docFormTarget);
+  if(dupe){ toast('이미 존재하는 문서번호입니다.', 'err'); return; }
+
+  const btn = document.getElementById('btnConfirmDocForm');
+  btn.disabled = true; btn.textContent = '저장 중...';
+  try{
+    if(docFormMode === 'add'){
+      state.docs.push({
+        code, cat, title,
+        currentRev: rev, currentDate: date,
+        driveFileId: null, driveFileName: null,
+        pdfFileId: null, pdfFileName: null, pdfStale: false,
+        link,
+        history: []
+      });
+      toast(`${code} 문서가 목록에 추가되었습니다.`, 'ok');
+    } else {
+      docFormTarget.code = code;
+      docFormTarget.cat = cat;
+      docFormTarget.title = title;
+      docFormTarget.currentRev = rev;
+      docFormTarget.currentDate = date;
+      docFormTarget.link = link;
+      toast(`${code} 문서 정보가 수정되었습니다.`, 'ok');
+    }
+    await saveMetadata();
+    renderTable();
+    closeModal('overlayDocForm');
+  }catch(err){
+    console.error(err);
+    toast('저장 실패: ' + err.message, 'err');
+  }finally{
+    btn.disabled = false; btn.textContent = '저장';
+  }
+});
+
+document.getElementById('btnDocFormPdfAttach').addEventListener('click', ()=>{
+  if(!docFormTarget) return;
+  openUploadPdfModal(docFormTarget);
+});
+document.getElementById('btnDocFormPdfDelete').addEventListener('click', async ()=>{
+  const doc = docFormTarget;
+  if(!doc || !doc.pdfFileId) return;
+  if(!requirePermission('edit')) return;
+  if(!confirm(`${doc.code}에 첨부된 PDF(${doc.pdfFileName})를 삭제할까요?`)) return;
+  const pwOk = await confirmWithPassword(`${doc.code}의 PDF 첨부파일을 삭제하려면 비밀번호를 확인해주세요.`);
+  if(!pwOk) return;
+  const btn = document.getElementById('btnDocFormPdfDelete');
+  btn.disabled = true;
+  try{
+    await deleteDriveFile(doc.pdfFileId);
+    doc.pdfFileId = null;
+    doc.pdfFileName = null;
+    doc.pdfStale = false;
+    await saveMetadata();
+    renderTable();
+    refreshDocFormPdfSection();
+    toast(`${doc.code} 첨부 PDF가 삭제되었습니다.`, 'ok');
+  }catch(err){
+    console.error(err);
+    toast('삭제 실패: ' + err.message, 'err');
+  }finally{
+    btn.disabled = false;
+  }
+});
+
+/* ---- 문서(행) 삭제 ---- */
+function openDeleteDocModal(doc){
+  if(!requireAuth()) return;
+  if(!requirePermission('admin')) return;
+  deleteMode = 'doc';
+  activeDeleteDoc = doc;
+  const fileNote = (doc.driveFileId || (doc.history && doc.history.some(h=>h.fileId)))
+    ? '등록된 첨부파일과 개정 이력 파일도 Drive에서 함께 영구 삭제됩니다.'
+    : '등록된 첨부파일은 없습니다.';
+  document.getElementById('deleteMsg').innerHTML =
+    `<b>${doc.code}</b> (${escapeHtml(doc.title)}) 문서를 목록에서 완전히 삭제합니다.<br><br>${fileNote}<br><br>이 작업은 되돌릴 수 없습니다.`;
+  document.getElementById('btnConfirmDelete').textContent = '문서 삭제';
+  openModal('overlayDelete');
+}
+async function confirmDeleteDocRow(doc){
+  const btn = document.getElementById('btnConfirmDelete');
+  try{
+    if(doc.driveFileId){
+      try{ await deleteDriveFile(doc.driveFileId); }catch(e){ console.warn(e); }
+    }
+    if(doc.pdfFileId){
+      try{ await deleteDriveFile(doc.pdfFileId); }catch(e){ console.warn(e); }
+    }
+    if(doc.history && doc.history.length){
+      for(const h of doc.history){
+        if(h.fileId){ try{ await deleteDriveFile(h.fileId); }catch(e){ console.warn(e); } }
+      }
+    }
+    state.docs = state.docs.filter(d => d !== doc);
+    await saveMetadata();
+    renderTable();
+    closeModal('overlayDelete');
+    toast(`${doc.code} 문서가 목록에서 삭제되었습니다.`, 'ok');
+  }catch(err){
+    console.error(err);
+    toast('삭제 실패: ' + err.message, 'err');
+  }
+}
+
+/* ---- 다운로드 ---- */
+async function doDownload(doc){
+  if(!requireAuth()) return;
+  if(!doc.driveFileId){ toast('등록된 파일이 없습니다.', 'err'); return; }
+  try{
+    toast(`${doc.code} 다운로드 중...`);
+    const blob = await downloadContent(doc.driveFileId);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = doc.driveFileName || (doc.code + '.hwp');
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }catch(err){
+    console.error(err);
+    toast('다운로드 실패: ' + err.message, 'err');
+  }
+}
+
+/* ---- PDF 파일 판별 및 다운로드 ---- */
+function isPdfFileName(name){ return /\.pdf$/i.test(name||''); }
+function getPrintableFileId(doc){
+  if(doc.pdfFileId) return doc.pdfFileId;
+  if(doc.driveFileId && isPdfFileName(doc.driveFileName)) return doc.driveFileId;
+  return null;
+}
+async function doDownloadPdfFile(doc, btnEl){
+  if(!requireAuth()) return;
+  const fileId = getPrintableFileId(doc);
+  if(!fileId){ toast('PDF 파일이 없습니다. 먼저 PDF를 첨부해주세요.', 'err'); return; }
+  const fileName = doc.pdfFileId ? doc.pdfFileName : doc.driveFileName;
+  if(btnEl){ btnEl.disabled = true; }
+  try{
+    toast(`${doc.code} PDF 다운로드 중...`);
+    const blob = await downloadContent(fileId);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fileName || (doc.code + '.pdf');
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }catch(err){
+    console.error(err);
+    toast('다운로드 실패: ' + err.message, 'err');
+  }finally{
+    if(btnEl){ btnEl.disabled = !getPrintableFileId(doc); }
+  }
+}
+
+/* ---- 이력 ---- */
+function openHistoryModal(doc){
+  document.getElementById('historyCodeTag').textContent = `${doc.code} · ${doc.title}`;
+  const list = document.getElementById('historyList');
+  if(!doc.history || !doc.history.length){
+    list.innerHTML = '<div class="history-empty">등록된 개정 이력이 없습니다.</div>';
+  } else {
+    list.innerHTML = doc.history.map((h,idx)=>`
+      <li>
+        <div class="history-meta" style="flex:1;">
+          <span class="rv">${h.rev} · ${formatDate(h.date)}</span>
+          <span class="fn">${escapeHtml(h.fileName)}</span>
+          <div class="hist-reason-view" data-reason-view="${idx}">
+            <span class="hist-reason-text">${h.reason ? escapeHtml(h.reason) : '<i style="color:#b7bfc9;font-style:normal;">개정 사유 미입력</i>'}</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${h.fileId ? `<button class="small ghost" data-hist-dl="${idx}">다운로드</button>` : ''}
+          <button class="small ghost" data-hist-reason-edit="${idx}" ${canEdit()?'':'disabled'}>사유수정</button>
+          <button class="small danger-btn" data-hist-reason-del="${idx}" ${(isAdmin() && h.reason)?'':'disabled'}>사유삭제</button>
+          ${h.fileId ? `<button class="small danger-btn" data-hist-del="${idx}" ${isAdmin()?'':'disabled'}>영구삭제</button>` : ''}
+        </div>
+      </li>`).join('');
+    list.dataset.code = doc.code;
+  }
+  openModal('overlayHistory');
+}
+function renderReasonEditor(doc, idx){
+  const container = document.querySelector(`[data-reason-view="${idx}"]`);
+  if(!container) return;
+  const current = doc.history[idx].reason || '';
+  container.innerHTML = `
+    <div style="display:flex;gap:6px;margin-top:4px;align-items:center;">
+      <input type="text" data-reason-input="${idx}" value="${escapeHtml(current)}" placeholder="개정 사유 입력" style="flex:1;min-width:120px;padding:5px 8px;border:1px solid var(--line);border-radius:var(--radius);font-size:12px;font-family:var(--sans);">
+      <button class="small primary" data-hist-reason-save="${idx}">저장</button>
+      <button class="small ghost" data-hist-reason-cancel="${idx}">취소</button>
+    </div>`;
+  const inp = container.querySelector('input');
+  if(inp){ inp.focus(); inp.addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.querySelector(`[data-hist-reason-save="${idx}"]`).click(); }); }
+}
+document.getElementById('historyList').addEventListener('click', async (e)=>{
+  const code = document.getElementById('historyList').dataset.code;
+  const doc = state.docs.find(d=>d.code===code);
+  if(!doc) return;
+  const dlBtn = e.target.closest('[data-hist-dl]');
+  const delBtn = e.target.closest('[data-hist-del]');
+  const reasonEditBtn = e.target.closest('[data-hist-reason-edit]');
+  const reasonSaveBtn = e.target.closest('[data-hist-reason-save]');
+  const reasonCancelBtn = e.target.closest('[data-hist-reason-cancel]');
+  const reasonDelBtn = e.target.closest('[data-hist-reason-del]');
+  if(dlBtn){
+    const h = doc.history[+dlBtn.getAttribute('data-hist-dl')];
+    try{
+      const blob = await downloadContent(h.fileId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download=h.fileName; document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    }catch(err){ toast('다운로드 실패: ' + err.message, 'err'); }
+  }
+  if(reasonEditBtn){
+    if(!requirePermission('edit')) return;
+    renderReasonEditor(doc, +reasonEditBtn.getAttribute('data-hist-reason-edit'));
+  }
+  if(reasonCancelBtn){
+    openHistoryModal(doc);
+  }
+  if(reasonSaveBtn){
+    if(!requirePermission('edit')) return;
+    const idx = +reasonSaveBtn.getAttribute('data-hist-reason-save');
+    const input = document.querySelector(`[data-reason-input="${idx}"]`);
+    const val = input ? input.value.trim() : '';
+    const pwOk = await confirmWithPassword('개정 사유를 저장하려면 비밀번호를 확인해주세요.');
+    if(!pwOk) return;
+    try{
+      doc.history[idx].reason = val || null;
+      await saveMetadata();
+      openHistoryModal(doc);
+      toast('개정 사유가 저장되었습니다.', 'ok');
+    }catch(err){ toast('저장 실패: ' + err.message, 'err'); }
+  }
+  if(reasonDelBtn){
+    if(!requirePermission('admin')) return;
+    const idx = +reasonDelBtn.getAttribute('data-hist-reason-del');
+    if(!doc.history[idx].reason) return;
+    if(!confirm('등록된 개정 사유를 삭제할까요?')) return;
+    try{
+      doc.history[idx].reason = null;
+      await saveMetadata();
+      openHistoryModal(doc);
+      toast('개정 사유가 삭제되었습니다.', 'ok');
+    }catch(err){ toast('삭제 실패: ' + err.message, 'err'); }
+  }
+  if(delBtn){
+    if(!requirePermission('admin')) return;
+    const idx = +delBtn.getAttribute('data-hist-del');
+    const h = doc.history[idx];
+    if(!confirm(`${h.rev} (${formatDate(h.date)}) 버전을 Drive에서 영구 삭제할까요?\n(이력 목록에서도 함께 삭제됩니다)`)) return;
+    try{
+      if(h.fileId) await deleteDriveFile(h.fileId);
+      doc.history.splice(idx, 1);
+      await saveMetadata();
+      openHistoryModal(doc);
+      renderTable();
+      toast('과거 버전 파일과 이력이 함께 삭제되었습니다.', 'ok');
+    }catch(err){ toast('삭제 실패: ' + err.message, 'err'); }
+  }
+});
+
+/* ---- 삭제(현재 등록본) / 문서 행삭제 공용 모달 ---- */
+let activeDeleteDoc = null;
+let deleteMode = 'file'; // 'file' | 'doc'
+function openDeleteModal(doc){
+  if(!requireAuth()) return;
+  if(!requirePermission('admin')) return;
+  deleteMode = 'file';
+  activeDeleteDoc = doc;
+  document.getElementById('deleteMsg').innerHTML =
+    `<b>${doc.code}</b> (${escapeHtml(doc.title)})의 현재 등록 파일<br>「${escapeHtml(doc.driveFileName)}」을(를) Drive에서 삭제합니다.<br><br>개정 이력은 유지되며, 문서 상태는 "미등록"으로 변경됩니다.`;
+  document.getElementById('btnConfirmDelete').textContent = '삭제';
+  openModal('overlayDelete');
+}
+async function confirmDeleteFileOnly(doc){
+  await deleteDriveFile(doc.driveFileId);
+  doc.driveFileId = null;
+  doc.driveFileName = null;
+  await saveMetadata();
+  renderTable();
+  closeModal('overlayDelete');
+  toast(`${doc.code} 등록 파일이 삭제되었습니다.`, 'ok');
+}
+document.getElementById('btnConfirmDelete').addEventListener('click', async ()=>{
+  if(!requirePermission('admin')) return;
+  const doc = activeDeleteDoc;
+  if(!doc) return;
+  const pwOk = await confirmWithPassword(`${doc.code} ${deleteMode === 'doc' ? '문서를 목록에서 삭제' : '등록 파일을 삭제'}하려면 비밀번호를 확인해주세요.`);
+  if(!pwOk) return;
+  const btn = document.getElementById('btnConfirmDelete');
+  btn.disabled = true; btn.textContent = '삭제 중...';
+  try{
+    if(deleteMode === 'doc'){
+      await confirmDeleteDocRow(doc);
+    } else {
+      await confirmDeleteFileOnly(doc);
+    }
+  }catch(err){
+    console.error(err);
+    toast('삭제 실패: ' + err.message, 'err');
+  }finally{
+    btn.disabled = false; btn.textContent = '삭제';
+  }
+});
+
+function requireAuth(){
+  if(!state.accessToken){ toast('먼저 Google 로그인이 필요합니다.', 'err'); return false; }
+  return true;
+}
+
+/* ============ Firebase Authentication 게이트 ============ */
+const LS_FB_API_KEY = 'kolas_fb_api_key';
+const LS_FB_AUTH_DOMAIN = 'kolas_fb_auth_domain';
+const LS_FB_PROJECT_ID = 'kolas_fb_project_id';
+const LS_FB_APP_ID = 'kolas_fb_app_id';
+
+/* ▼▼▼ 관리자 전용: 팀 공용 Firebase 설정을 여기에 한 번만 입력하면
+   팀원들은 별도 설정 없이 이메일/비밀번호 입력만으로 로그인됩니다.
+   Firebase 콘솔 → 프로젝트 설정 → 일반 → "내 앱" → SDK 설정 및 구성 에서 확인 ▼▼▼ */
+const DEFAULT_FB_CONFIG = {
+  apiKey: 'AIzaSyA7Pd6sOOleG0tdyDXVELcFcZtNiUuSkyI',
+  authDomain: 'kolas-doc-manager.firebaseapp.com',
+  projectId: 'kolas-doc-manager',
+  appId: '1:949051187014:web:986c9efb6fc53251228f47'
+};
+/* ▲▲▲ 예: apiKey:'AIzaSy...', authDomain:'kolas-doc-manager.firebaseapp.com' ▲▲▲ */
+
+let fbApp = null;
+let fbAuth = null;
+let fbDb = null;
+
+function getFbConfig(){
+  return {
+    apiKey: localStorage.getItem(LS_FB_API_KEY) || DEFAULT_FB_CONFIG.apiKey,
+    authDomain: localStorage.getItem(LS_FB_AUTH_DOMAIN) || DEFAULT_FB_CONFIG.authDomain,
+    projectId: localStorage.getItem(LS_FB_PROJECT_ID) || DEFAULT_FB_CONFIG.projectId,
+    appId: localStorage.getItem(LS_FB_APP_ID) || DEFAULT_FB_CONFIG.appId
+  };
+}
+function isFbConfigured(){
+  const c = getFbConfig();
+  return !!(c.apiKey && c.authDomain && c.projectId && c.appId);
+}
+function loadFbSetupFields(){
+  const c = getFbConfig();
+  document.getElementById('fbApiKey').value = c.apiKey;
+  document.getElementById('fbAuthDomain').value = c.authDomain;
+  document.getElementById('fbProjectId').value = c.projectId;
+  document.getElementById('fbAppId').value = c.appId;
+}
+function cleanFbValue(v){
+  // 사용자가 firebaseConfig 객체 통째로 복사해 붙여넣었을 때 흔히 남는 따옴표/쉼표/공백 제거
+  return v.trim().replace(/^["'`]+|["'`,]+$/g, '').trim();
+}
+['btnOpenFbSetupFromGate','btnOpenFbSetupFromSettings','linkOpenFbSetupAlways'].forEach((id)=>{
+  document.getElementById(id).addEventListener('click', ()=>{
+    loadFbSetupFields();
+    openModal('overlayFbSetup');
+  });
+});
+document.getElementById('btnSaveFbConfig').addEventListener('click', ()=>{
+  let apiKey = cleanFbValue(document.getElementById('fbApiKey').value);
+  let authDomain = cleanFbValue(document.getElementById('fbAuthDomain').value);
+  const projectId = cleanFbValue(document.getElementById('fbProjectId').value);
+  const appId = cleanFbValue(document.getElementById('fbAppId').value);
+  if(!apiKey || !authDomain || !projectId || !appId){
+    toast('모든 Firebase 설정 값을 입력해주세요.', 'err');
+    return;
+  }
+  // 흔한 실수 자동 감지: Google OAuth Client ID를 apiKey에 넣는 경우
+  if(apiKey.includes('.apps.googleusercontent.com')){
+    toast('apiKey 칸에 Google OAuth Client ID가 입력되었습니다. Firebase 콘솔의 apiKey(AIza로 시작) 값을 넣어주세요.', 'err');
+    return;
+  }
+  if(!/^AIza/.test(apiKey)){
+    toast('apiKey 형식이 올바르지 않습니다. 보통 "AIza"로 시작합니다. Firebase 콘솔 값을 다시 확인해주세요.', 'err');
+    return;
+  }
+  // 흔한 실수 자동 감지: 호스팅 주소(URL)를 authDomain에 넣는 경우
+  if(/^https?:\/\//i.test(authDomain) || authDomain.includes('/')){
+    toast('authDomain 칸에는 URL이 아닌 도메인만 입력합니다 (예: 프로젝트ID.firebaseapp.com). GitHub Pages 주소는 Firebase 콘솔의 "승인된 도메인"에 별도로 등록해야 합니다.', 'err');
+    return;
+  }
+  if(!/\.firebaseapp\.com$|\.web\.app$/.test(authDomain)){
+    toast('authDomain 형식이 올바르지 않습니다. 보통 "프로젝트ID.firebaseapp.com" 형태입니다. Firebase 콘솔 값을 다시 확인해주세요.', 'err');
+    return;
+  }
+  if(typeof firebase === 'undefined'){
+    toast('Firebase SDK 로드에 실패했습니다. 인터넷 연결 상태나 광고차단/보안 프로그램의 CDN 차단 여부를 확인해주세요.', 'err');
+    return;
+  }
+  localStorage.setItem(LS_FB_API_KEY, apiKey);
+  localStorage.setItem(LS_FB_AUTH_DOMAIN, authDomain);
+  localStorage.setItem(LS_FB_PROJECT_ID, projectId);
+  localStorage.setItem(LS_FB_APP_ID, appId);
+  closeModal('overlayFbSetup');
+  toast('Firebase 설정이 저장되었습니다. 연결 중...', 'ok');
+  fbApp = null; fbAuth = null; // 재연결을 위해 초기화
+  initGate();
+});
+
+async function initFirebase(){
+  if(!isFbConfigured()) return false;
+  if(typeof firebase === 'undefined'){
+    console.error('Firebase SDK가 로드되지 않았습니다 (firebase is undefined). 네트워크/CDN 차단 여부를 확인하세요.');
+    showGateError('Firebase SDK 로드 실패. 인터넷 연결 또는 CDN(www.gstatic.com) 차단 여부를 확인해주세요.');
+    return false;
+  }
+  try{
+    if(!fbApp){
+      // 이전에 (잘못된 설정으로) 초기화된 기본 앱이 남아있으면 완전히 제거 후 새로 생성
+      // (그렇지 않으면 "Firebase App named '[DEFAULT]' already exists" 오류로 재설정이 막힘)
+      if(firebase.apps && firebase.apps.length){
+        await Promise.all(firebase.apps.map(a=>a.delete().catch(e=>console.warn(e))));
+      }
+      fbApp = firebase.initializeApp(getFbConfig());
+      fbAuth = firebase.auth();
+      fbDb = firebase.firestore(fbApp);
+      // 브라우저 창(탭)을 닫으면 로그인 상태가 유지되지 않고 자동으로 로그아웃되도록 세션 단위 유지로 설정
+      try{
+        await fbAuth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+      }catch(e){
+        console.warn('Auth persistence(SESSION) 설정 실패, 기본값으로 진행합니다:', e);
+      }
+      let resolved = false;
+      fbAuth.getRedirectResult().catch((err)=>{
+        console.warn('Google 리다이렉트 로그인 오류:', err);
+        const errEl = document.getElementById('googleLoginError');
+        if(errEl){ errEl.style.color = 'var(--danger)'; errEl.textContent = fbErrorToKorean(err); }
+      });
+      fbAuth.onAuthStateChanged((user)=>{
+        resolved = true;
+        if(user){ unlockApp(user.email); }
+        else { showGateLoginForm(); }
+      }, (err)=>{
+        resolved = true;
+        console.error(err);
+        showGateError('로그인 상태 확인 실패: ' + fbErrorToKorean(err));
+      });
+      // onAuthStateChanged가 응답 없이 멈추는 경우(네트워크 차단 등) 대비한 안전장치
+      setTimeout(()=>{
+        if(!resolved){
+          console.warn('Firebase onAuthStateChanged 응답 지연 - 네트워크 상태를 확인하세요.');
+          showGateError('Firebase 서버 응답이 없습니다. 네트워크 연결 상태를 확인하고 다시 시도해주세요.');
+        }
+      }, 8000);
+    }
+    return true;
+  }catch(err){
+    console.error(err);
+    showGateError('Firebase 초기화 실패: ' + (err.message || String(err)) + ' (apiKey/authDomain/projectId/appId 값을 다시 확인해주세요)');
+    fbApp = null; fbAuth = null;
+    return false;
+  }
+}
+
+function showGateError(msg){
+  document.getElementById('fbNotConfigured').classList.remove('hidden');
+  document.getElementById('fbNotConfiguredFoot').classList.remove('hidden');
+  document.getElementById('loginForm').classList.add('hidden');
+  document.getElementById('loginFoot').classList.add('hidden');
+  document.getElementById('gateSubtitle').textContent = '연결 오류';
+  document.querySelector('#fbNotConfigured .gate-error').innerHTML = escapeHtml(msg);
+}
+function showGateNotConfigured(){
+  document.getElementById('fbNotConfigured').classList.remove('hidden');
+  document.getElementById('fbNotConfiguredFoot').classList.remove('hidden');
+  document.getElementById('loginForm').classList.add('hidden');
+  document.getElementById('loginFoot').classList.add('hidden');
+  document.getElementById('gateSubtitle').textContent = 'Firebase 설정이 필요합니다';
+  document.querySelector('#fbNotConfigured .gate-error').innerHTML =
+    '아직 Firebase 인증 설정이 되어있지 않습니다.<br>아래 <b>"Firebase 설정하기"</b> 버튼을 눌러 프로젝트 정보를 입력해주세요.';
+}
+function showGateLoginForm(){
+  document.getElementById('fbNotConfigured').classList.add('hidden');
+  document.getElementById('fbNotConfiguredFoot').classList.add('hidden');
+  document.getElementById('loginForm').classList.remove('hidden');
+  document.getElementById('loginFoot').classList.remove('hidden');
+  document.getElementById('gateSubtitle').textContent = '이메일과 비밀번호로 로그인하세요';
+  document.getElementById('authGate').classList.remove('hidden');
+  document.getElementById('appRoot').classList.add('hidden');
+  document.getElementById('loginError').textContent = '';
+}
+async function initGate(){
+  if(location.protocol === 'file:'){
+    console.warn('이 페이지가 file:// 프로토콜로 열려 있습니다. Firebase/Google 로그인은 http(s)로 호스팅된 상태(예: GitHub Pages)에서 정상 동작합니다.');
+    showGateError('이 파일을 더블클릭 등으로 직접 열면(file:// 주소) Google/Firebase 로그인이 동작하지 않습니다. GitHub Pages 등 http(s) 주소로 호스팅한 뒤 그 주소로 접속해주세요.');
+    return;
+  }
+  const ok = await initFirebase();
+  if(!ok){
+    if(!isFbConfigured()) showGateNotConfigured();
+  }
+}
+
+document.getElementById('btnLoginSubmit').addEventListener('click', async ()=>{
+  const email = document.getElementById('loginId').value.trim();
+  const pw = document.getElementById('loginPw').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  if(!email || !pw){ errEl.textContent = '이메일과 비밀번호를 입력해주세요.'; return; }
+  const btn = document.getElementById('btnLoginSubmit');
+  btn.disabled = true; btn.textContent = '로그인 중...';
+  try{
+    await fbAuth.signInWithEmailAndPassword(email, pw);
+    document.getElementById('loginPw').value = '';
+    // unlockApp은 onAuthStateChanged에서 자동 호출됨
+  }catch(err){
+    errEl.textContent = fbErrorToKorean(err);
+  }finally{
+    btn.disabled = false; btn.textContent = '로그인';
+  }
+});
+document.getElementById('btnGoogleLoginGate').addEventListener('click', async ()=>{
+  const errEl = document.getElementById('googleLoginError');
+  errEl.style.color = 'var(--danger)';
+  errEl.textContent = '';
+  if(!fbAuth){ errEl.textContent = 'Firebase가 초기화되지 않았습니다.'; return; }
+  const btn = document.getElementById('btnGoogleLoginGate');
+  btn.disabled = true;
+  try{
+    const provider = new firebase.auth.GoogleAuthProvider();
+    try{
+      await fbAuth.signInWithPopup(provider);
+      // unlockApp은 onAuthStateChanged에서 자동 호출됨
+    }catch(popupErr){
+      // 팝업이 차단되었거나 지원되지 않는 환경이면 리다이렉트 방식으로 대체
+      const code = popupErr && popupErr.code || '';
+      if(code.includes('popup-blocked') || code.includes('popup-closed-by-user') || code.includes('operation-not-supported-in-this-environment') || code.includes('cancelled-popup-request')){
+        if(code.includes('popup-closed-by-user') || code.includes('cancelled-popup-request')){
+          // 사용자가 직접 닫은 경우는 자동으로 리다이렉트하지 않고 조용히 종료
+          return;
+        }
+        await fbAuth.signInWithRedirect(provider);
+      } else {
+        throw popupErr;
+      }
+    }
+  }catch(err){
+    errEl.textContent = fbErrorToKorean(err);
+  }finally{
+    btn.disabled = false;
+  }
+});
+['loginId','loginPw'].forEach(id=>{
+  document.getElementById(id).addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter') document.getElementById('btnLoginSubmit').click();
+  });
+});
+document.getElementById('linkForgotPw').addEventListener('click', async ()=>{
+  const email = document.getElementById('loginId').value.trim();
+  const errEl = document.getElementById('loginError');
+  if(!email){ errEl.textContent = '비밀번호를 재설정할 이메일을 먼저 입력해주세요.'; return; }
+  try{
+    await fbAuth.sendPasswordResetEmail(email);
+    errEl.style.color = 'var(--brass)';
+    errEl.textContent = '재설정 메일을 발송했습니다. 메일함을 확인해주세요.';
+  }catch(err){
+    errEl.style.color = 'var(--danger)';
+    errEl.textContent = fbErrorToKorean(err);
+  }
+});
+function fbErrorToKorean(err){
+  const code = err && err.code || '';
+  if(code.includes('user-not-found') || code.includes('wrong-password') || code.includes('invalid-credential')) return '이메일 또는 비밀번호가 올바르지 않습니다.';
+  if(code.includes('invalid-email')) return '올바른 이메일 형식이 아닙니다.';
+  if(code.includes('too-many-requests')) return '시도 횟수가 많습니다. 잠시 후 다시 시도해주세요.';
+  if(code.includes('user-disabled')) return '비활성화된 계정입니다. 관리자에게 문의해주세요.';
+  return '오류: ' + (err && err.message ? err.message : String(err));
+}
+
+function unlockApp(email){
+  document.getElementById('authGate').classList.add('hidden');
+  document.getElementById('appRoot').classList.remove('hidden');
+  document.getElementById('loggedInAs').textContent = email + ' 님';
+  loadSettings();
+  computeMyRole();
+  updateGlobalButtonStates();
+  renderRoleUI();
+  loadSigners();
+  if(getClientId()) attemptSilentGoogleAuth();
+  renderTable();
+}
+document.getElementById('btnLogout').addEventListener('click', ()=>{
+  if(fbAuth) fbAuth.signOut();
+});
+document.getElementById('btnChangeAuth').addEventListener('click', async ()=>{
+  const curPw = document.getElementById('inputCurPw').value;
+  const newPw = document.getElementById('inputNewPw').value;
+  const msgEl = document.getElementById('changeAuthMsg');
+  msgEl.style.color = 'var(--danger)';
+  if(!fbAuth || !fbAuth.currentUser){ msgEl.textContent = '로그인 상태가 아닙니다.'; return; }
+  if(!curPw || !newPw){ msgEl.textContent = '현재 비밀번호와 새 비밀번호를 모두 입력해주세요.'; return; }
+  if(newPw.length < 6){ msgEl.textContent = '새 비밀번호는 6자 이상이어야 합니다(Firebase 정책).'; return; }
+  try{
+    const user = fbAuth.currentUser;
+    const cred = firebase.auth.EmailAuthProvider.credential(user.email, curPw);
+    await user.reauthenticateWithCredential(cred);
+    await user.updatePassword(newPw);
+    document.getElementById('inputCurPw').value = '';
+    document.getElementById('inputNewPw').value = '';
+    msgEl.style.color = 'var(--brass)';
+    msgEl.textContent = '비밀번호가 변경되었습니다.';
+  }catch(err){
+    msgEl.textContent = fbErrorToKorean(err);
+  }
+});
+
+/* ============ 초기화 ============ */
+window.addEventListener('DOMContentLoaded', ()=>{
+  initGate();
+});
+
+
+</script>
+</body>
+</html>
